@@ -8,6 +8,9 @@ contract Crowdfunding {
 	uint256 public deadline;
 	address public owner;
 
+	enum CampaignState { Active, Successful, Failed }
+	CampaignState public state;
+
 	struct Tier {
 		string name;
 		uint256 amount;
@@ -21,6 +24,11 @@ contract Crowdfunding {
 		_;	//runs remaining part of funciton if require is ok
 	}
 
+	modifier campaignOpen() {
+		require(state == CampaignState.Active, "Campaign is not active.");
+		_;
+	}
+
 	constructor(
 		string memory _name,
 		string memory _description,
@@ -32,15 +40,27 @@ contract Crowdfunding {
 		goal = _goal;
 		deadline = block.timestamp + (_duration * 1 days);
 		owner = msg.sender;
+		state = CampaignState.Active;
+	}
+
+	function checkAndUpdateState () internal {
+		if (state == CampaignState.Active) {
+			if (block.timestamp >= deadline) {
+				state = address(this).balance >= goal ? CampaignState.Successful : CampaignState.Failed;
+			} else {
+				state = address(this).balance >= goal ? CampaignState.Successful : CampaignState.Active;
+			}
+		}
 	}
 
 	// write function - reqirements are to pay more than 0 and that campaign hasnt ended
-	function fund(uint256 _tierID) public payable {
-		require(block.timestamp < deadline, "Campaign has ended.");
+	function fund(uint256 _tierID) public payable campaignOpen {
 		require(_tierID < tiers.length, "Invalid tier.");
 		require(msg.value == tiers[_tierID].amount, "Incorect amount");
 
 		tiers[_tierID].backers++;
+
+		checkAndUpdateState();
 	}
 
 	function addTier(
@@ -61,7 +81,8 @@ contract Crowdfunding {
 	// if all requirements have been reached we can transfer the balance
 	// onlyOwner added after public that will check modifire and if it is ok it will proceede with function
 	function withdraw() public onlyOwner {
-		require(address(this).balance >= goal, "Goal has not been reached.");
+		checkAndUpdateState();
+		require(state == CampaignState.Successful, "Campaign not successful.");
 
 		uint256 balance = address(this).balance;
 		require(balance > 0, "No balance to withdraw.");
