@@ -8,6 +8,19 @@ contract Crowdfunding {
 	uint256 public deadline;
 	address public owner;
 
+	struct Tier {
+		string name;
+		uint256 amount;
+		uint256 backers;
+	}
+
+	Tier[] public tiers;
+
+	modifier onlyOwner() {
+		require(msg.sender == owner, "Not the owner.");
+		_;	//runs remaining part of funciton if require is ok
+	}
+
 	constructor(
 		string memory _name,
 		string memory _description,
@@ -22,15 +35,32 @@ contract Crowdfunding {
 	}
 
 	// write function - reqirements are to pay more than 0 and that campaign hasnt ended
-	function fund() public payable {
-		require(msg.value > 0, "Must fund amount greater than 0.");
+	function fund(uint256 _tierID) public payable {
 		require(block.timestamp < deadline, "Campaign has ended.");
+		require(_tierID < tiers.length, "Invalid tier.");
+		require(msg.value == tiers[_tierID].amount, "Incorect amount");
+
+		tiers[_tierID].backers++;
+	}
+
+	function addTier(
+		string memory _name,
+		uint256 _amount
+	) public onlyOwner {
+		require(_amount > 0, "Must be greater than 0.");
+		tiers.push(Tier(_name, _amount, 0));
+	}
+
+	function removeTier(uint256 _id) public onlyOwner {
+		require(_id < tiers.length, "Tier does not exist");
+		tiers[_id] = tiers[tiers.length - 1];
+		tiers.pop();
 	}
 
 	// write function - requirements are that only owner can withdraw the money and only if goal is reached
 	// if all requirements have been reached we can transfer the balance
-	function withdraw() public {
-		require(msg.sender == owner, "Only the owner can withdraw.");
+	// onlyOwner added after public that will check modifire and if it is ok it will proceede with function
+	function withdraw() public onlyOwner {
 		require(address(this).balance >= goal, "Goal has not been reached.");
 
 		uint256 balance = address(this).balance;
